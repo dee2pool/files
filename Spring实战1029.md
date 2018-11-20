@@ -206,4 +206,172 @@ Spring通过设置spring.profiles.active和spring.profiles.default的值确定�
 
 @Conditional注解可以用在@Bean注解的方法上。如果给定的条件计算结果为true，就会创建这个bean，否则这个bean会被忽略。
 
+```
+@Bean
+@Conditional(Magic.class)
+public MagicBean magicBean(){
+    return new MagicBean()
+}
+```
+
+
+
 @Conditional参数是一个类，这个类可以是任意实现了Condition接口的类型。
+
+```
+//Condition接口
+public interface Condition{
+    boolean matches(ConditionContext ctxt,AnnotatedTypeMetadata metadata);
+}
+
+public class Magic implements Condition{
+    public boolean matches(ConditionContext ctxt,AnnotatedTypeMetadata metadata){
+        Enviroment env=context.getEnvironment();
+        //检查环境中是否存中magic属性
+        return env.containsProperty("magic");
+    }
+}
+public interface ConditionContext{
+    BeanDefinitionRegistry getRegistry();//检查bean定义
+    ConfigurableListableBeanFactory getBeanFactory();//检查bean是否存中，甚至探查属性
+    Environment getEnvironment();//检查环境变量是否存在
+    ResourceLoader getResourceLoader();//返回ResourceLoader加载的资源
+    ClassLoader getClassLoader();//返回ClassLoader加载并检查类是否存在
+}
+public interface AnnotatedTypeMetadata{
+    boolean isAnnotated(String annotationType);//检查@bean注解的方法是不是还有其他注解
+    Map<String,Object> getAnnotationAttributes(String annotationType);
+    Map<String,Object> getAnnotationAttributes(String annotationType,boolean classVluesAsString);
+    MultiValueMap<String,Object>getAllAnnotationAttributes(String annotationType);
+    MultiValueMap<String,Object>getAllAnnotationAttributes(String annotationType,boolean classValuesAsString);
+}
+```
+
+如果返回true就创建bean
+
+#### 处理自动装配的歧义
+
+1.使用@Primary标选首选的bean
+
+2.使用@Qualifier("name")与@Autowired和@Inject一同使用，在注入时指定想要哪个bean
+
+#### bean的作用域
+
+默认情况下bean是单例的Spring定义了多种作用域:
+
+1.单例Singleton
+
+2.原型Prototype:每次注入或者通过Spring应用上下文获取的时候都会创建一个新的bean
+
+3.会话Session
+
+4.请求Rquest
+
+可以在bean上使用@Scope指定作用域
+
+@Scope("prototype")
+
+```
+//每次会话都会创建一个bean
+@Scope(value=WebApplicationContext.SCOPE_SESSION,proxyMode=ScopedProxyMode.INTERFACES)
+proxyMode属性解决了将会话和请求作用域的bean注入到单例bean中的问题，注入到bean的关联是bean的代理，如果注入的是具体的类应该使用ScopedProxyMode.Target_class
+```
+
+### 运行时注入
+
+有两种方法:1.属性占位符 2.SpEL表达式
+
+1.使用@PropertySource
+
+```
+@Configuration
+@PropertySource("classpath:/com/soundsystem/app.properties")
+public class ExpressiveConfig{
+    @Autowired
+    Enviroment env;
+    @Bean
+    public BlanDisc disc(){
+        return new BalnkDisc{
+            env.getProperty("disc.title"),
+            env.getProperty("disc.artist")
+        };
+    }
+}
+```
+
+properties属性文件会加载到Spring的Environment中，通过getProperty查询。
+
+```
+//Environment的方法
+String getProperty(String key)
+String getProperty(String key,String defaultValue)
+T getProperty(String key,Class<T> type)
+T getProperty(String key,Class<T> type ,T defaultValue)
+boolean containsProperty(String key)
+Class<T> getPropertyAsClass(String key,Class)//将某个属性解析为类
+String[] getActiveProfiles() 返回激活profile名称的数组
+String[] getDefaultProfiles() 返回默认profile名称的数组
+boolean acceptsProfiles(String... profiles):如果enviroment支持给定的profile，返回true
+```
+
+属性占位符
+
+${....}//从外部文件获得属性
+
+```
+public BlankDisc(@Value("${disc.title}")String title,@Value("${disc.artist")String artist){
+    this.title=title;
+    this.artist=artist;
+}
+```
+
+为了使用占位符，必须要配置PropertyPlaceholderConfiguer bean或者PropertySourcesPlaceholderConfiguer bean(推荐使用)
+
+```
+@Bean
+public PropertySourcesPlaceholderConfigurer placeholderConfigurer(){
+    return new PropertySourcesPlaceholderConfigurer();
+}
+//xml文件
+<context:property-placeholder>
+```
+
+spel的功能:
+
+SpEl表达式要放到#{...}中
+
+1.使用bean的id来引入bean
+
+2.调用方法和访问对象的属性
+
+3.对值进行算术、关系和逻辑运算
+
+4.正则表达式匹配
+
+5.集合操作
+
+ 1.#{sgtPepers.artist}
+
+2.#{systemProperties['disc.title']}//引用系统属性
+
+3.#{artist.selectArtist()}//调用方法
+
+4.#{artist.selectArtist()?.toUpperCase()}//调用系统方法?.运算符能够在访问它右边内容之前确保它对应的元素不为null
+
+5.访问类作用域的方法或常量时需要使用T()
+
+T(java.lang.Math).PI
+
+```
+#{admin.email matches '正则表达式'}//正则
+#{juke.songs[4].title}juke类的songs集合属性的第五个元素的title属性
+#{juke.songs.?[artist eq 'Aero']}//.?[]对集合进行过滤，得到集合的一个子集
+.^[]查询第一个匹配项
+.$[]查询最后一个匹配项
+.![]从集合的每个成员中选择特定的属性放到另外一个集合中
+```
+
+
+
+
+
